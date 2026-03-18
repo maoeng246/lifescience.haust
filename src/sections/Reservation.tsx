@@ -4,7 +4,6 @@ import { motion } from 'motion/react';
 import { Calendar, Clock, Users, Mail, Phone, User, CheckCircle2, Download, X, QrCode } from 'lucide-react';
 import { dbService, ReservationData } from '../services/db';
 import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 
 export default function Reservation() {
   const [formData, setFormData] = useState({
@@ -41,7 +40,7 @@ export default function Reservation() {
     }
   };
 
-  const downloadPDF = async () => {
+  const downloadVoucher = async () => {
     const element = document.getElementById('voucher-ticket');
     if (!element) return;
     
@@ -71,7 +70,7 @@ export default function Reservation() {
 
       // 使用 html2canvas 截图克隆的元素
       const canvas = await html2canvas(clone, { 
-        scale: 2, 
+        scale: 3, // 提高清晰度
         backgroundColor: '#ffffff',
         useCORS: true,
         allowTaint: true,
@@ -82,27 +81,16 @@ export default function Reservation() {
       // 移除临时容器
       document.body.removeChild(tempContainer);
       
+      // 转换为图片并触发下载
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
+      const link = document.createElement('a');
+      link.download = `LSM展馆预约凭证_${voucher?.id}.png`;
+      link.href = imgData;
+      link.click();
       
-      // 获取 A4 纸张宽度
-      const pdfWidth = pdf.internal.pageSize.getWidth ? pdf.internal.pageSize.getWidth() : 210;
-      
-      // 调整凭证在 PDF 中的大小和居中位置 (占据页面宽度的 70%)
-      const targetWidth = pdfWidth * 0.7;
-      const targetHeight = (canvas.height * targetWidth) / canvas.width;
-      const xOffset = (pdfWidth - targetWidth) / 2;
-      const yOffset = 20;
-      
-      pdf.addImage(imgData, 'PNG', xOffset, yOffset, targetWidth, targetHeight);
-      pdf.save(`LSM展馆预约凭证_${voucher?.id}.pdf`);
     } catch (error) {
-      console.error('PDF generation failed', error);
-      alert(`PDF 生成失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      console.error('Image generation failed', error);
+      alert(`图片生成失败: ${error instanceof Error ? error.message : '未知错误'}`);
     } finally {
       setIsDownloading(false);
     }
@@ -342,7 +330,7 @@ export default function Reservation() {
             </div>
 
             <button
-              onClick={downloadPDF}
+              onClick={downloadVoucher}
               disabled={isDownloading}
               className="w-full mt-4 bg-emerald-500 hover:bg-emerald-400 disabled:bg-emerald-500/50 disabled:cursor-not-allowed text-black font-bold py-3 rounded-xl transition-colors duration-300 flex items-center justify-center gap-2 shrink-0"
             >
@@ -350,7 +338,7 @@ export default function Reservation() {
                 <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
               ) : (
                 <>
-                  <Download className="w-4 h-4" /> 保存凭证为 PDF
+                  <Download className="w-4 h-4" /> 保存凭证为图片
                 </>
               )}
             </button>
