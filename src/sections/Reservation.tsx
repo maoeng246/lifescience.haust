@@ -1,7 +1,10 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
-import { Calendar, Clock, Users, Mail, Phone, User, CheckCircle2 } from 'lucide-react';
-import { dbService } from '../services/db';
+import { Calendar, Clock, Users, Mail, Phone, User, CheckCircle2, Download, X, QrCode } from 'lucide-react';
+import { dbService, ReservationData } from '../services/db';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 export default function Reservation() {
   const [formData, setFormData] = useState({
@@ -13,6 +16,8 @@ export default function Reservation() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [voucher, setVoucher] = useState<ReservationData | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,8 +28,9 @@ export default function Reservation() {
     
     setIsSubmitting(true);
     try {
-      await dbService.saveReservation(formData);
+      const savedData = await dbService.saveReservation(formData);
       setIsSuccess(true);
+      setVoucher(savedData);
       setFormData({ name: '', phone: '', date: '', visitors: '1', notes: '' });
       setTimeout(() => setIsSuccess(false), 5000);
     } catch (error) {
@@ -32,6 +38,46 @@ export default function Reservation() {
       alert('预约提交失败，请重试');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const downloadPDF = async () => {
+    const element = document.getElementById('voucher-ticket');
+    if (!element) return;
+    
+    setIsDownloading(true);
+    try {
+      // 临时修改样式以确保截图清晰
+      const originalTransform = element.style.transform;
+      element.style.transform = 'none';
+      
+      const canvas = await html2canvas(element, { 
+        scale: 2, 
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false
+      });
+      
+      element.style.transform = originalTransform;
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      
+      // A4 尺寸: 210 x 297 mm
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      // 居中放置凭证
+      const xOffset = 0;
+      const yOffset = 20;
+      
+      pdf.addImage(imgData, 'PNG', xOffset, yOffset, pdfWidth, pdfHeight);
+      pdf.save(`LSM展馆预约凭证_${voucher?.id}.pdf`);
+    } catch (error) {
+      console.error('PDF generation failed', error);
+      alert('PDF 生成失败，请重试');
+    } finally {
+      setIsDownloading(false);
     }
   };
   const containerVariants = {
@@ -205,6 +251,86 @@ export default function Reservation() {
           </motion.form>
         </motion.div>
       </div>
+
+      {/* Voucher Modal */}
+      {voucher && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-zinc-900 border border-white/10 rounded-2xl p-6 w-full max-w-md relative shadow-2xl flex flex-col max-h-[90vh]"
+          >
+            <button 
+              onClick={() => setVoucher(null)}
+              className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors z-10"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            
+            <h3 className="text-xl font-bold text-white mb-4 text-center">预约成功</h3>
+            
+            <div className="flex-1 overflow-y-auto overflow-x-hidden pb-4">
+              {/* Ticket Element to be converted to PDF */}
+              <div id="voucher-ticket" className="bg-white text-black rounded-xl p-8 relative overflow-hidden mx-auto w-full max-w-[350px] shadow-lg">
+                {/* Decorative elements */}
+                <div className="absolute top-0 left-0 w-full h-3 bg-emerald-500"></div>
+                
+                <div className="text-center mb-8 mt-2">
+                  <h4 className="text-3xl font-black tracking-tighter mb-1">LSM<span className="text-emerald-500">.</span></h4>
+                  <p className="text-xs text-gray-500 font-medium tracking-widest uppercase">Exhibition Voucher</p>
+                </div>
+                
+                <div className="space-y-4 mb-8">
+                  <div className="flex flex-col border-b border-gray-100 pb-3">
+                    <span className="text-gray-400 text-xs uppercase tracking-wider mb-1">预约编号 / ID</span>
+                    <span className="font-mono font-bold text-xl text-emerald-600 tracking-wider">{voucher.id}</span>
+                  </div>
+                  <div className="flex flex-col border-b border-gray-100 pb-3">
+                    <span className="text-gray-400 text-xs uppercase tracking-wider mb-1">姓名 / Name</span>
+                    <span className="font-bold text-lg">{voucher.name}</span>
+                  </div>
+                  <div className="flex flex-col border-b border-gray-100 pb-3">
+                    <span className="text-gray-400 text-xs uppercase tracking-wider mb-1">联系电话 / Phone</span>
+                    <span className="font-medium text-lg">{voucher.phone}</span>
+                  </div>
+                  <div className="flex flex-col border-b border-gray-100 pb-3">
+                    <span className="text-gray-400 text-xs uppercase tracking-wider mb-1">预约日期 / Date</span>
+                    <span className="font-medium text-lg">{voucher.date}</span>
+                  </div>
+                  <div className="flex flex-col pb-2">
+                    <span className="text-gray-400 text-xs uppercase tracking-wider mb-1">参观人数 / Visitors</span>
+                    <span className="font-medium text-lg">{voucher.visitors} 人</span>
+                  </div>
+                </div>
+                
+                <div className="mt-6 pt-6 border-t-2 border-dashed border-gray-200 flex flex-col items-center justify-center relative">
+                  {/* Cutout circles for ticket effect */}
+                  <div className="absolute -left-11 -top-3 w-6 h-6 bg-zinc-900 rounded-full"></div>
+                  <div className="absolute -right-11 -top-3 w-6 h-6 bg-zinc-900 rounded-full"></div>
+                  
+                  <QrCode className="w-24 h-24 text-black mb-3" />
+                  <p className="text-xs text-gray-400 text-center">入馆时请出示此凭证或二维码</p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={downloadPDF}
+              disabled={isDownloading}
+              className="w-full mt-4 bg-emerald-500 hover:bg-emerald-400 disabled:bg-emerald-500/50 disabled:cursor-not-allowed text-black font-bold py-3 rounded-xl transition-colors duration-300 flex items-center justify-center gap-2 shrink-0"
+            >
+              {isDownloading ? (
+                <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+              ) : (
+                <>
+                  <Download className="w-4 h-4" /> 保存凭证为 PDF
+                </>
+              )}
+            </button>
+          </motion.div>
+        </div>,
+        document.body
+      )}
     </section>
   );
 }

@@ -10,17 +10,17 @@ export interface ReservationData {
 
 // 预留的数据库接口 - 目前使用 localStorage 模拟，未来可替换为真实后端 API
 export const dbService = {
-  async saveReservation(data: Omit<ReservationData, 'id' | 'createdAt'>): Promise<boolean> {
+  async saveReservation(data: Omit<ReservationData, 'id' | 'createdAt'>): Promise<ReservationData> {
     return new Promise((resolve) => {
       setTimeout(() => {
         const existing = JSON.parse(localStorage.getItem('lsm_reservations') || '[]');
         const newRecord: ReservationData = {
           ...data,
-          id: Math.random().toString(36).substring(2, 9),
+          id: Math.random().toString(36).substring(2, 10).toUpperCase(),
           createdAt: new Date().toISOString(),
         };
         localStorage.setItem('lsm_reservations', JSON.stringify([newRecord, ...existing]));
-        resolve(true);
+        resolve(newRecord);
       }, 600); // 模拟网络延迟
     });
   },

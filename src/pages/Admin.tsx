@@ -31,7 +31,7 @@ export default function Admin() {
   const handleExport = () => {
     if (reservations.length === 0) return;
 
-    const headers = ['提交时间', '姓名', '联系电话', '预约日期', '参观人数', '备注信息'];
+    const headers = ['预约编号', '提交时间', '姓名', '联系电话', '预约日期', '参观人数', '备注信息'];
     
     const csvRows = reservations.map(res => {
       const submitTime = new Date(res.createdAt!).toLocaleString('zh-CN', {
@@ -45,6 +45,7 @@ export default function Admin() {
       const escapeCSV = (str: string) => `"${(str || '').replace(/"/g, '""')}"`;
       
       return [
+        escapeCSV(res.id || ''),
         escapeCSV(submitTime),
         escapeCSV(res.name),
         escapeCSV(res.phone),
@@ -125,6 +126,7 @@ export default function Admin() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-white/10 bg-black/50">
+                    <th className="p-4 text-sm font-medium text-zinc-400 whitespace-nowrap">预约编号</th>
                     <th className="p-4 text-sm font-medium text-zinc-400 whitespace-nowrap">提交时间</th>
                     <th className="p-4 text-sm font-medium text-zinc-400 whitespace-nowrap">姓名</th>
                     <th className="p-4 text-sm font-medium text-zinc-400 whitespace-nowrap">联系电话</th>
@@ -136,6 +138,9 @@ export default function Admin() {
                 <tbody className="divide-y divide-white/5">
                   {reservations.map((res) => (
                     <tr key={res.id} className="hover:bg-white/5 transition-colors">
+                      <td className="p-4 text-sm font-mono text-emerald-400 whitespace-nowrap">
+                        {res.id}
+                      </td>
                       <td className="p-4 text-sm text-zinc-300 whitespace-nowrap">
                         {new Date(res.createdAt!).toLocaleString('zh-CN', {
                           month: '2-digit',
