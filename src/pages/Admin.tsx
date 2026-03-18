@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dbService, ReservationData } from '../services/db';
-import { ArrowLeft, Database, Calendar, Users, Phone, User, FileText } from 'lucide-react';
+import { ArrowLeft, Database, Calendar, Users, Phone, User, FileText, Download } from 'lucide-react';
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -26,6 +26,44 @@ export default function Admin() {
   const handleLogout = () => {
     sessionStorage.removeItem('isAdmin');
     navigate('/');
+  };
+
+  const handleExport = () => {
+    if (reservations.length === 0) return;
+
+    const headers = ['提交时间', '姓名', '联系电话', '预约日期', '参观人数', '备注信息'];
+    
+    const csvRows = reservations.map(res => {
+      const submitTime = new Date(res.createdAt!).toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      
+      const escapeCSV = (str: string) => `"${(str || '').replace(/"/g, '""')}"`;
+      
+      return [
+        escapeCSV(submitTime),
+        escapeCSV(res.name),
+        escapeCSV(res.phone),
+        escapeCSV(res.date),
+        escapeCSV(res.visitors),
+        escapeCSV(res.notes)
+      ].join(',');
+    });
+
+    const csvContent = [headers.join(','), ...csvRows].join('\n');
+    // Add BOM for Excel UTF-8 compatibility
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `展馆预约数据_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -56,9 +94,19 @@ export default function Admin() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-12">
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold mb-2">预约记录</h2>
-          <p className="text-zinc-400">查看并管理所有来自展馆预约模块的提交信息。</p>
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-3xl font-bold mb-2">预约记录</h2>
+            <p className="text-zinc-400">查看并管理所有来自展馆预约模块的提交信息。</p>
+          </div>
+          <button
+            onClick={handleExport}
+            disabled={reservations.length === 0 || isLoading}
+            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors font-medium border border-emerald-500/20"
+          >
+            <Download className="w-4 h-4" />
+            导出 CSV
+          </button>
         </div>
 
         {isLoading ? (
