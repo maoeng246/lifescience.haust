@@ -47,35 +47,62 @@ export default function Reservation() {
     
     setIsDownloading(true);
     try {
-      // 临时修改样式以确保截图清晰
-      const originalTransform = element.style.transform;
-      element.style.transform = 'none';
+      // 获取原元素的尺寸
+      const rect = element.getBoundingClientRect();
       
-      const canvas = await html2canvas(element, { 
+      // 创建一个临时的容器，放在 body 下，脱离所有 transform 动画的影响
+      const tempContainer = document.createElement('div');
+      tempContainer.style.position = 'absolute';
+      tempContainer.style.left = '-9999px';
+      tempContainer.style.top = '-9999px';
+      tempContainer.style.width = `${rect.width}px`;
+      tempContainer.style.height = `${rect.height}px`;
+      document.body.appendChild(tempContainer);
+
+      // 克隆凭证元素
+      const clone = element.cloneNode(true) as HTMLElement;
+      clone.style.width = '100%';
+      clone.style.height = '100%';
+      clone.style.margin = '0';
+      tempContainer.appendChild(clone);
+
+      // 等待 DOM 更新
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      // 使用 html2canvas 截图克隆的元素
+      const canvas = await html2canvas(clone, { 
         scale: 2, 
         backgroundColor: '#ffffff',
         useCORS: true,
-        logging: false
+        allowTaint: true,
+        width: rect.width,
+        height: rect.height
       });
       
-      element.style.transform = originalTransform;
+      // 移除临时容器
+      document.body.removeChild(tempContainer);
       
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
       
-      // A4 尺寸: 210 x 297 mm
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      // 获取 A4 纸张宽度
+      const pdfWidth = pdf.internal.pageSize.getWidth ? pdf.internal.pageSize.getWidth() : 210;
       
-      // 居中放置凭证
-      const xOffset = 0;
+      // 调整凭证在 PDF 中的大小和居中位置 (占据页面宽度的 70%)
+      const targetWidth = pdfWidth * 0.7;
+      const targetHeight = (canvas.height * targetWidth) / canvas.width;
+      const xOffset = (pdfWidth - targetWidth) / 2;
       const yOffset = 20;
       
-      pdf.addImage(imgData, 'PNG', xOffset, yOffset, pdfWidth, pdfHeight);
+      pdf.addImage(imgData, 'PNG', xOffset, yOffset, targetWidth, targetHeight);
       pdf.save(`LSM展馆预约凭证_${voucher?.id}.pdf`);
     } catch (error) {
       console.error('PDF generation failed', error);
-      alert('PDF 生成失败，请重试');
+      alert(`PDF 生成失败: ${error instanceof Error ? error.message : '未知错误'}`);
     } finally {
       setIsDownloading(false);
     }
