@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
-import { Calendar, Clock, Users, Mail, Phone, User, CheckCircle2, Download, X, QrCode } from 'lucide-react';
+import { Calendar, Clock, Users, Mail, Phone, User, CheckCircle2, X, QrCode, FileText } from 'lucide-react';
 import { dbService, ReservationData } from '../services/db';
-import * as htmlToImage from 'html-to-image';
 
 export default function Reservation() {
   const [formData, setFormData] = useState({
@@ -16,7 +15,9 @@ export default function Reservation() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [voucher, setVoucher] = useState<ReservationData | null>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
+  const [showMyReservations, setShowMyReservations] = useState(false);
+  const [myReservations, setMyReservations] = useState<ReservationData[]>([]);
+  const [isLoadingReservations, setIsLoadingReservations] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,55 +41,17 @@ export default function Reservation() {
     }
   };
 
-  const downloadPDF = async () => {
-    const element = document.getElementById('voucher-ticket');
-    if (!element) return;
-    
-    setIsDownloading(true);
+  const handleViewReservations = async () => {
+    setVoucher(null);
+    setShowMyReservations(true);
+    setIsLoadingReservations(true);
     try {
-      // 确保元素完全渲染后再截图
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      const dataUrl = await htmlToImage.toPng(element, {
-        quality: 1.0,
-        pixelRatio: 3,
-        backgroundColor: '#ffffff',
-        style: {
-          transform: 'none',
-          margin: '0',
-          boxShadow: 'none'
-        }
-      });
-      
-      // 获取原元素的尺寸用于计算比例
-      const rect = element.getBoundingClientRect();
-      const imgWidth = rect.width;
-      const imgHeight = rect.height;
-      
-      const { jsPDF } = await import('jspdf');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-      
-      // 获取 A4 纸张宽度
-      const pdfWidth = pdf.internal.pageSize.getWidth ? pdf.internal.pageSize.getWidth() : 210;
-      
-      // 调整凭证在 PDF 中的大小和居中位置 (占据页面宽度的 70%)
-      const targetWidth = pdfWidth * 0.7;
-      const targetHeight = (imgHeight * targetWidth) / imgWidth;
-      const xOffset = (pdfWidth - targetWidth) / 2;
-      const yOffset = 20;
-      
-      pdf.addImage(dataUrl, 'PNG', xOffset, yOffset, targetWidth, targetHeight);
-      pdf.save(`LSM展馆预约凭证_${voucher?.id}.pdf`);
-      
+      const data = await dbService.getReservations();
+      setMyReservations(data);
     } catch (error) {
-      console.error('PDF generation failed', error);
-      alert(`PDF 生成失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      console.error('Failed to fetch reservations:', error);
     } finally {
-      setIsDownloading(false);
+      setIsLoadingReservations(false);
     }
   };
   const containerVariants = {
@@ -259,6 +222,15 @@ export default function Reservation() {
                 '提交预约申请'
               )}
             </motion.button>
+
+            <motion.button
+              variants={itemVariants}
+              type="button"
+              onClick={handleViewReservations}
+              className="w-full bg-transparent border border-white/20 hover:border-emerald-500/50 hover:text-emerald-400 text-zinc-300 font-medium py-4 rounded-xl transition-colors duration-300 flex justify-center items-center gap-2"
+            >
+              <FileText className="w-4 h-4" /> 查看我的预约
+            </motion.button>
           </motion.form>
         </motion.div>
       </div>
@@ -325,19 +297,78 @@ export default function Reservation() {
               </div>
             </div>
 
+            <div className="text-center mt-2 mb-4">
+              <p className="text-emerald-400 font-medium text-sm">⚠️ 请截图保存此凭证，以便入馆核验</p>
+            </div>
+
             <button
-              onClick={downloadPDF}
-              disabled={isDownloading}
-              className="w-full mt-4 bg-emerald-500 hover:bg-emerald-400 disabled:bg-emerald-500/50 disabled:cursor-not-allowed text-black font-bold py-3 rounded-xl transition-colors duration-300 flex items-center justify-center gap-2 shrink-0"
+              onClick={handleViewReservations}
+              className="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-3 rounded-xl transition-colors duration-300 flex items-center justify-center gap-2 shrink-0"
             >
-              {isDownloading ? (
-                <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-              ) : (
-                <>
-                  <Download className="w-4 h-4" /> 保存凭证为 PDF
-                </>
-              )}
+              <FileText className="w-4 h-4" /> 查看我的预约
             </button>
+          </motion.div>
+        </div>,
+        document.body
+      )}
+
+      {/* My Reservations Modal */}
+      {showMyReservations && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-zinc-900 border border-white/10 rounded-2xl p-6 w-full max-w-2xl relative shadow-2xl flex flex-col max-h-[90vh]"
+          >
+            <button 
+              onClick={() => setShowMyReservations(false)}
+              className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors z-10"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            
+            <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-emerald-400" /> 我的预约
+            </h3>
+            
+            <div className="flex-1 overflow-y-auto pr-2 space-y-4">
+              {isLoadingReservations ? (
+                <div className="flex justify-center items-center py-12">
+                  <div className="w-8 h-8 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
+                </div>
+              ) : myReservations.length === 0 ? (
+                <div className="text-center py-12 text-zinc-500">
+                  <p>暂无预约记录</p>
+                </div>
+              ) : (
+                myReservations.map((res) => (
+                  <div key={res.id} className="bg-black/50 border border-white/5 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-emerald-400 font-bold">{res.id}</span>
+                        <span className="text-xs px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded-full">预约成功</span>
+                      </div>
+                      <div className="text-sm text-zinc-300">
+                        <span className="font-medium text-white">{res.name}</span> · {res.phone}
+                      </div>
+                      <div className="text-sm text-zinc-400 flex items-center gap-4">
+                        <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {res.date}</span>
+                        <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {res.visitors} 人</span>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        setShowMyReservations(false);
+                        setVoucher(res);
+                      }}
+                      className="text-sm bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+                    >
+                      查看凭证
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </motion.div>
         </div>,
         document.body
